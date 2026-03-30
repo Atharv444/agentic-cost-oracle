@@ -3,7 +3,6 @@ name: Agentic Cost-Oracle
 on:
   pull_request:
     branches: [ "main" ]
-    # This ensures it only runs when infra files actually change
     paths:
       - "examples/terraform/**"
       - "app/**"
@@ -41,10 +40,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install groq
 
-      # 🤖 RUNNING THE ORACLE
+      # 🤖 RUNNING THE ORACLE (WITH IMPORT FIX)
       - name: Run Agentic Oracle
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 🎯 THIS LINE FIXES THE "ModuleNotFoundError"
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           python app/main.py --metadata-path /tmp/infracost.json
