@@ -1,0 +1,95 @@
+name: "Agentic Cost-Oracle"
+description: "AI-powered cloud cost optimization — analyses infrastructure changes in PRs and suggests cheaper alternatives."
+author: "Agentic Cost-Oracle"
+
+branding:
+  icon: "dollar-sign"
+  color: "green"
+
+inputs:
+  groq_api_key:
+    description: "Groq API key for Llama-3 inference"
+    required: true
+  infracost_api_key:
+    description: "Infracost API key for cloud cost estimation"
+    required: true
+  llm_provider:
+    description: "LLM provider: groq or huggingface"
+    required: false
+    default: "groq"
+  llm_model:
+    description: "LLM model identifier"
+    required: false
+    default: "llama-3.3-70b-versatile"
+  cost_threshold_pct:
+    description: "Minimum percentage cost change to trigger full LLM analysis"
+    required: false
+    default: "5.0"
+  terraform_path:
+    description: "Path to Terraform files (relative to repo root)"
+    required: false
+    default: "."
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Infracost
+      uses: infracost/actions/setup@v3
+      with:
+        api-key: ${{ inputs.infracost_api_key }}
+
+    - name: Checkout base branch
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.base.ref }}
+        path: _base-branch
+
+    - name: Generate Infracost baseline
+      shell: bash
+      run: |
+        infracost breakdown \
+          --path=_base-branch/${{ inputs.terraform_path }} \
+          --format=json \
+          --out-file=/tmp/infracost-base.json || true
+
+    - name: Generate Infracost PR breakdown
+      shell: bash
+      run: |
+        infracost breakdown \
+          --path=${{ inputs.terraform_path }} \
+          --format=json \
+          --out-file=/tmp/infracost-pr.json || true
+
+    - name: Generate Infracost diff
+      shell: bash
+      run: |
+        infracost diff \
+          --path=${{ inputs.terraform_path }} \
+          --compare-to=/tmp/infracost-base.json \
+          --format=json \
+          --out-file=/tmp/infracost-diff.json || true
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install dependencies
+      shell: bash
+      run: pip install -r ${{ github.action_path }}/requirements.txt
+
+    - name: Run Cost-Oracle Agent
+      shell: bash
+      env:
+        GROQ_API_KEY: ${{ inputs.groq_api_key }}
+        GITHUB_TOKEN: ${{ github.token }}
+        REPO_FULL_NAME: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        LLM_PROVIDER: ${{ inputs.llm_provider }}
+        LLM_MODEL: ${{ inputs.llm_model }}
+        COST_THRESHOLD_PCT: ${{ inputs.cost_threshold_pct }}
+        INFRACOST_DIFF_PATH: /tmp/infracost-diff.json
+        INFRACOST_PR_PATH: /tmp/infracost-pr.json
+        INFRACOST_BASE_PATH: /tmp/infracost-base.json
+      run: python -m app.main
+      working-directory: ${{ github.action_path }}
