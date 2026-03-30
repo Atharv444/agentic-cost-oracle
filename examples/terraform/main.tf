@@ -1,11 +1,9 @@
 # ============================================================
-# Example Terraform — AWS Web Application Stack
-# Used to demonstrate Cost-Oracle analysis on PR changes.
+# AGENTIC COST-ORACLE: EXTREME COST DEMO (STAGING VS PROD)
 # ============================================================
 
 terraform {
   required_version = ">= 1.5"
-
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -15,140 +13,56 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region = "us-east-1"
 }
 
-# ── Variables ────────────────────────────────────────────────
+# ── EC2 GPU CLUSTER (The Massive Money Spender) ──────────────
 
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "staging"
-}
-
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-  default     = "t3.medium"  # Try changing to m5.xlarge to trigger Cost-Oracle
-}
-
-variable "db_instance_class" {
-  description = "RDS instance class"
-  type        = string
-  default     = "db.t3.medium"  # Try changing to db.r6g.xlarge
-}
-
-# ── EC2 Instance ─────────────────────────────────────────────
-
-resource "aws_instance" "web" {
-  ami           = "ami-0c02fb55956c7d316"  # Amazon Linux 2023
-  instance_type = var.instance_type
+resource "aws_instance" "ml_worker" {
+  ami           = "ami-0c02fb55956c7d316"
+  # Using the p3.16xlarge (roughly $24/hour)
+  instance_type = "p3.16xlarge" 
 
   root_block_device {
-    volume_size = 30   # Try changing to 500 to see Cost-Oracle flag it
-    volume_type = "gp3"
+    volume_size = 2000    # 2 Terabytes of storage
+    volume_type = "io2"   # Provisioned IOPS (Extremely expensive)
+    iops        = 50000   # Maxing out the IOPS to maximize the bill
   }
 
   tags = {
-    Name        = "${var.environment}-web-server"
-    Environment = var.environment
-    ManagedBy   = "terraform"
+    Name        = "Enterprise-ML-Worker"
+    Environment = "production"
   }
 }
 
-# ── RDS Database ─────────────────────────────────────────────
+# ── ENTERPRISE DATABASE (Multi-AZ High Performance) ──────────
 
-resource "aws_db_instance" "main" {
-  identifier     = "${var.environment}-postgres"
-  engine         = "postgres"
-  engine_version = "15.4"
+resource "aws_db_instance" "enterprise_db" {
+  identifier        = "oracle-test-db-prod"
+  engine            = "postgres"
+  # Massive memory-optimized instance
+  instance_class    = "db.r6g.8xlarge" 
+  allocated_storage = 3000             # 3 Terabytes
+  storage_type      = "io2"
+  iops              = 60000            # Very high performance costs
 
-  instance_class        = var.db_instance_class
-  allocated_storage     = 100
-  max_allocated_storage = 500
-  storage_type          = "gp3"
+  # This setting literally doubles the entire DB bill
+  multi_az          = true  
+  
+  db_name  = "proddb"
+  username = "admin"
+  
+  # Agentic Oracle should flag this hardcoded password as a security risk
+  password = "SuperSecretAdminPassword123!" 
 
-  db_name  = "appdb"
-  username = "dbadmin"
-  password = "change-me-in-secrets-manager"  # Cost-Oracle will flag this too
-
-  multi_az            = var.environment == "production" ? true : false
   skip_final_snapshot = true
-
-  tags = {
-    Name        = "${var.environment}-postgres"
-    Environment = var.environment
-  }
 }
 
-# ── S3 Bucket ────────────────────────────────────────────────
+# ── HIGH-CAPACITY STORAGE ────────────────────────────────────
 
-resource "aws_s3_bucket" "assets" {
-  bucket = "${var.environment}-app-assets-${random_id.bucket_suffix.hex}"
-
-  tags = {
-    Name        = "${var.environment}-assets"
-    Environment = var.environment
-  }
+resource "aws_s3_bucket" "massive_storage" {
+  bucket = "expensive-data-lake-oracle-demo-001"
 }
 
-resource "random_id" "bucket_suffix" {
-  byte_length = 4
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "assets" {
-  bucket = aws_s3_bucket.assets.id
-
-  rule {
-    id     = "transition-to-ia"
-    status = "Enabled"
-
-    transition {
-      days          = 90
-      storage_class = "STANDARD_IA"
-    }
-
-    transition {
-      days          = 180
-      storage_class = "GLACIER"
-    }
-  }
-}
-
-# ── NAT Gateway (common cost anti-pattern) ───────────────────
-
-resource "aws_eip" "nat" {
-  domain = "vpc"
-  tags = {
-    Name = "${var.environment}-nat-eip"
-  }
-}
-
-resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = "subnet-placeholder"  # Replace with real subnet
-
-  tags = {
-    Name = "${var.environment}-nat-gateway"
-  }
-}
-
-# ── Outputs ──────────────────────────────────────────────────
-
-output "web_instance_id" {
-  value = aws_instance.web.id
-}
-
-output "db_endpoint" {
-  value = aws_db_instance.main.endpoint
-}
-
-output "monthly_cost_note" {
-  value = "Run 'infracost breakdown --path=.' to estimate costs"
-}
+# NOTE: We have removed all NAT Gateway and Subnet placeholders 
+# to ensure Infracost calculates the costs with 100% accuracy.
