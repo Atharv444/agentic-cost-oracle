@@ -3,7 +3,7 @@ name: Agentic Cost-Oracle
 on:
   pull_request:
     branches: [ "main" ]
-    # This ensures it only runs when infra files actually change
+    # This ensures it only runs when infra files actually changeS MADE
     paths:
       - "examples/terraform/**"
       - "app/**"
