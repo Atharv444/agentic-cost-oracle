@@ -1,6 +1,5 @@
 # ============================================================
-# Example Terraform — AWS Web Application Stack
-# Used to demonstrate Cost-Oracle analysis on PR changes.
+# EDITED: High-Cost Infrastructure for Cost-Oracle Testing
 # ============================================================
 
 terraform {
@@ -29,36 +28,36 @@ variable "aws_region" {
 variable "environment" {
   description = "Environment name"
   type        = string
-  default     = "staging"
+  default     = "production" # CHANGED: Switched to production to trigger Multi-AZ costs
 }
 
 variable "instance_type" {
   description = "EC2 instance type"
-  type        = string
-  default     = "t3.medium"  # Try changing to m5.xlarge to trigger Cost-Oracle
+  type        = string 
+  default     = "p3.8xlarge" # CHANGED: Switched from t3.medium to an expensive GPU instance
 }
 
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
-  default     = "db.t3.medium"  # Try changing to db.r6g.xlarge
+  default     = "db.r6g.4xlarge" # CHANGED: Switched to a high-memory database instance
 }
 
 # ── EC2 Instance ─────────────────────────────────────────────
 
 resource "aws_instance" "web" {
-  ami           = "ami-0c02fb55956c7d316"  # Amazon Linux 2023
+  ami           = "ami-0c02fb55956c7d316" 
   instance_type = var.instance_type
 
   root_block_device {
-    volume_size = 30   # Try changing to 500 to see Cost-Oracle flag it
-    volume_type = "gp3"
+    volume_size = 1000  # CHANGED: Increased from 30GB to 1TB (Huge cost jump)
+    volume_type = "io2" # CHANGED: Switched to Provisioned IOPS (Very expensive)
+    iops        = 10000 
   }
 
   tags = {
     Name        = "${var.environment}-web-server"
     Environment = var.environment
-    ManagedBy   = "terraform"
   }
 }
 
@@ -70,15 +69,15 @@ resource "aws_db_instance" "main" {
   engine_version = "15.4"
 
   instance_class        = var.db_instance_class
-  allocated_storage     = 100
-  max_allocated_storage = 500
-  storage_type          = "gp3"
+  allocated_storage     = 2000 # CHANGED: Increased to 2TB
+  storage_type          = "io2" # CHANGED: High-performance storage
+  iops                  = 20000
 
   db_name  = "appdb"
   username = "dbadmin"
-  password = "change-me-in-secrets-manager"  # Cost-Oracle will flag this too
+  password = "SuperSecretPassword123!" # Agent should flag hardcoded password
 
-  multi_az            = var.environment == "production" ? true : false
+  multi_az            = true # Multi-AZ doubles the database cost
   skip_final_snapshot = true
 
   tags = {
@@ -87,68 +86,23 @@ resource "aws_db_instance" "main" {
   }
 }
 
-# ── S3 Bucket ────────────────────────────────────────────────
+# ── S3 Bucket (No changes needed, lifecycle is good) ─────────
 
 resource "aws_s3_bucket" "assets" {
   bucket = "${var.environment}-app-assets-${random_id.bucket_suffix.hex}"
-
-  tags = {
-    Name        = "${var.environment}-assets"
-    Environment = var.environment
-  }
 }
 
 resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "assets" {
-  bucket = aws_s3_bucket.assets.id
-
-  rule {
-    id     = "transition-to-ia"
-    status = "Enabled"
-
-    transition {
-      days          = 90
-      storage_class = "STANDARD_IA"
-    }
-
-    transition {
-      days          = 180
-      storage_class = "GLACIER"
-    }
-  }
-}
-
-# ── NAT Gateway (common cost anti-pattern) ───────────────────
-
-resource "aws_eip" "nat" {
-  domain = "vpc"
-  tags = {
-    Name = "${var.environment}-nat-eip"
-  }
-}
+# ── NAT Gateway ──────────────────────────────────────────────
 
 resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = "subnet-placeholder"  # Replace with real subnet
+  allocation_id = "eipalloc-placeholder"
+  subnet_id     = "subnet-placeholder"
 
   tags = {
     Name = "${var.environment}-nat-gateway"
   }
-}
-
-# ── Outputs ──────────────────────────────────────────────────
-
-output "web_instance_id" {
-  value = aws_instance.web.id
-}
-
-output "db_endpoint" {
-  value = aws_db_instance.main.endpoint
-}
-
-output "monthly_cost_note" {
-  value = "Run 'infracost breakdown --path=.' to estimate costs"
 }
