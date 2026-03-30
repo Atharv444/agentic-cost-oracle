@@ -1,5 +1,5 @@
 # ============================================================
-# AGENTIC COST-ORACLE: EXTREME COST DEMO
+# AGENTIC COST-ORACLE: EXTREME COST DEMO (STAGING VS PROD)
 # ============================================================
 
 terraform {
@@ -16,48 +16,53 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# ── EC2 GPU CLUSTER (The Big Money Spender) ──────────────────
+# ── EC2 GPU CLUSTER (The Massive Money Spender) ──────────────
 
 resource "aws_instance" "ml_worker" {
   ami           = "ami-0c02fb55956c7d316"
-  # We are using the most expensive GPU instance available
+  # Using the p3.16xlarge (roughly $24/hour)
   instance_type = "p3.16xlarge" 
 
   root_block_device {
-    volume_size = 2000    # 2 Terabytes
-    volume_type = "io2"   # Provisioned IOPS (Very expensive)
-    iops        = 32000   # Max performance = Max Cost
+    volume_size = 2000    # 2 Terabytes of storage
+    volume_type = "io2"   # Provisioned IOPS (Extremely expensive)
+    iops        = 50000   # Maxing out the IOPS to maximize the bill
   }
 
   tags = {
-    Name        = "Costly-ML-Worker"
+    Name        = "Enterprise-ML-Worker"
     Environment = "production"
   }
 }
 
-# ── DATABASE (Multi-AZ Enterprise Storage) ───────────────────
+# ── ENTERPRISE DATABASE (Multi-AZ High Performance) ──────────
 
 resource "aws_db_instance" "enterprise_db" {
-  identifier        = "oracle-test-db"
+  identifier        = "oracle-test-db-prod"
   engine            = "postgres"
-  instance_class    = "db.r6g.8xlarge" # Massive memory instance
+  # Massive memory-optimized instance
+  instance_class    = "db.r6g.8xlarge" 
   allocated_storage = 3000             # 3 Terabytes
   storage_type      = "io2"
-  iops              = 40000
+  iops              = 60000            # Very high performance costs
 
-  multi_az          = true  # This instantly doubles the monthly bill
+  # This setting literally doubles the entire DB bill
+  multi_az          = true  
   
   db_name  = "proddb"
   username = "admin"
-  password = "HardcodedPassword123!" # AI Agent should flag this security risk
+  
+  # Agentic Oracle should flag this hardcoded password as a security risk
+  password = "SuperSecretAdminPassword123!" 
 
   skip_final_snapshot = true
 }
 
-# ── HIGH-TRAFFIC DATA STORAGE ───────────────────────────────
+# ── HIGH-CAPACITY STORAGE ────────────────────────────────────
 
 resource "aws_s3_bucket" "massive_storage" {
-  bucket = "expensive-data-bucket-oracle-demo"
+  bucket = "expensive-data-lake-oracle-demo-001"
 }
 
-# (Notice: We removed the NAT Gateway placeholders to ensure Infracost runs perfectly)
+# NOTE: We have removed all NAT Gateway and Subnet placeholders 
+# to ensure Infracost calculates the costs with 100% accuracy.
