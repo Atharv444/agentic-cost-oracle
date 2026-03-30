@@ -1,10 +1,9 @@
 # ============================================================
-# EDITED: High-Cost Infrastructure for Cost-Oracle Testing
+# AGENTIC COST-ORACLE: EXTREME COST DEMO
 # ============================================================
 
 terraform {
   required_version = ">= 1.5"
-
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -14,95 +13,51 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region = "us-east-1"
 }
 
-# ── Variables ────────────────────────────────────────────────
+# ── EC2 GPU CLUSTER (The Big Money Spender) ──────────────────
 
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "production" # CHANGED: Switched to production to trigger Multi-AZ costs
-}
-
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string 
-  default     = "p3.8xlarge" # CHANGED: Switched from t3.medium to an expensive GPU instance
-}
-
-variable "db_instance_class" {
-  description = "RDS instance class"
-  type        = string
-  default     = "db.r6g.4xlarge" # CHANGED: Switched to a high-memory database instance
-}
-
-# ── EC2 Instance ─────────────────────────────────────────────
-
-resource "aws_instance" "web" {
-  ami           = "ami-0c02fb55956c7d316" 
-  instance_type = var.instance_type
+resource "aws_instance" "ml_worker" {
+  ami           = "ami-0c02fb55956c7d316"
+  # We are using the most expensive GPU instance available
+  instance_type = "p3.16xlarge" 
 
   root_block_device {
-    volume_size = 1000  # CHANGED: Increased from 30GB to 1TB (Huge cost jump)
-    volume_type = "io2" # CHANGED: Switched to Provisioned IOPS (Very expensive)
-    iops        = 10000 
+    volume_size = 2000    # 2 Terabytes
+    volume_type = "io2"   # Provisioned IOPS (Very expensive)
+    iops        = 32000   # Max performance = Max Cost
   }
 
   tags = {
-    Name        = "${var.environment}-web-server"
-    Environment = var.environment
+    Name        = "Costly-ML-Worker"
+    Environment = "production"
   }
 }
 
-# ── RDS Database ─────────────────────────────────────────────
+# ── DATABASE (Multi-AZ Enterprise Storage) ───────────────────
 
-resource "aws_db_instance" "main" {
-  identifier     = "${var.environment}-postgres"
-  engine         = "postgres"
-  engine_version = "15.4"
+resource "aws_db_instance" "enterprise_db" {
+  identifier        = "oracle-test-db"
+  engine            = "postgres"
+  instance_class    = "db.r6g.8xlarge" # Massive memory instance
+  allocated_storage = 3000             # 3 Terabytes
+  storage_type      = "io2"
+  iops              = 40000
 
-  instance_class        = var.db_instance_class
-  allocated_storage     = 2000 # CHANGED: Increased to 2TB
-  storage_type          = "io2" # CHANGED: High-performance storage
-  iops                  = 20000
+  multi_az          = true  # This instantly doubles the monthly bill
+  
+  db_name  = "proddb"
+  username = "admin"
+  password = "HardcodedPassword123!" # AI Agent should flag this security risk
 
-  db_name  = "appdb"
-  username = "dbadmin"
-  password = "SuperSecretPassword123!" # Agent should flag hardcoded password
-
-  multi_az            = true # Multi-AZ doubles the database cost
   skip_final_snapshot = true
-
-  tags = {
-    Name        = "${var.environment}-postgres"
-    Environment = var.environment
-  }
 }
 
-# ── S3 Bucket (No changes needed, lifecycle is good) ─────────
+# ── HIGH-TRAFFIC DATA STORAGE ───────────────────────────────
 
-resource "aws_s3_bucket" "assets" {
-  bucket = "${var.environment}-app-assets-${random_id.bucket_suffix.hex}"
+resource "aws_s3_bucket" "massive_storage" {
+  bucket = "expensive-data-bucket-oracle-demo"
 }
 
-resource "random_id" "bucket_suffix" {
-  byte_length = 4
-}
-
-# ── NAT Gateway ──────────────────────────────────────────────
-
-resource "aws_nat_gateway" "main" {
-  allocation_id = "eipalloc-placeholder"
-  subnet_id     = "subnet-placeholder"
-
-  tags = {
-    Name = "${var.environment}-nat-gateway"
-  }
-}
+# (Notice: We removed the NAT Gateway placeholders to ensure Infracost runs perfectly)
