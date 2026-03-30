@@ -3,11 +3,12 @@ name: Agentic Cost-Oracle
 on:
   pull_request:
     branches: [ "main" ]
-    # This ensures it only runs when infra files actually change
+    # Triggers only when relevant infrastructure or logic files change
     paths:
       - "examples/terraform/**"
       - "app/**"
       - ".github/workflows/**"
+  workflow_dispatch: # Allows manual triggering for testing
 
 permissions:
   contents: read
@@ -29,22 +30,30 @@ jobs:
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
 
-      # 🎯 TARGETING THE EXAMPLES FOLDER
       - name: Generate Infracost JSON
         run: |
           infracost breakdown --path ./examples/terraform \
                             --format json \
                             --out-file /tmp/infracost.json
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
 
-      - name: Install Python Dependencies
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install groq
+          pip install groq requests  # Added requests in case your script calls GH APIs
 
-      # 🤖 RUNNING THE ORACLE
       - name: Run Agentic Oracle
+        id: oracle_run
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Passing PR context to the script can be helpful for the agent
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           python app/main.py --metadata-path /tmp/infracost.json
