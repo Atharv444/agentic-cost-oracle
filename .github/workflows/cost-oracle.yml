@@ -3,6 +3,11 @@ name: Agentic Cost-Oracle
 on:
   pull_request:
     branches: [ "main" ]
+    # This ensures it only runs when infra files actually change
+    paths:
+      - "examples/terraform/**"
+      - "app/**"
+      - ".github/workflows/**"
 
 permissions:
   contents: read
@@ -16,13 +21,15 @@ jobs:
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Infracost
         uses: infracost/actions/setup@v3
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
 
-      # 🎯 CRITICAL FIX: We tell Infracost to look inside your examples folder
+      # 🎯 TARGETING THE EXAMPLES FOLDER
       - name: Generate Infracost JSON
         run: |
           infracost breakdown --path ./examples/terraform \
@@ -30,9 +37,11 @@ jobs:
                             --out-file /tmp/infracost.json
 
       - name: Install Python Dependencies
-        run: pip install groq
+        run: |
+          python -m pip install --upgrade pip
+          pip install groq
 
-      # 🤖 This runs your Python Agent with the correct data
+      # 🤖 RUNNING THE ORACLE
       - name: Run Agentic Oracle
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
